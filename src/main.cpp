@@ -4,12 +4,100 @@
 // TFT specs
 #define TFT_WIDTH  240
 #define TFT_HEIGHT 320 
+
 #define BKGD_COLOR TFT_BLACK
 #define MARGIN_TOP 20
-#define STEP_ITERATIONS 8
 
-TFT_eSPI    tft = TFT_eSPI();         // Create object "tft"
+#define STEP_ITERATIONS 8   // only used during simulations
+
+#define MIN_VELOCITY 2      // of enemy ships
+#define MAX_VELOCITY 6      // of enemy ships
+#define NUM_FIGHTERS 10     // current number of enemy ships
+#define MAX_NUM_FIGHTERS 20 // maximum possible number of enemy ships
+
+TFT_eSPI    tft = TFT_eSPI();            // Create object "tft"
 TFT_eSprite buffer = TFT_eSprite(&tft);  // Create Sprite object "img" with pointer to "tft" object
+TFT_eSprite enemy = TFT_eSprite(&tft);   // tie-fighter
+
+
+// ---------- OBJECTS --------------
+class TieFighter {
+  public:
+    int x;
+    int y;
+    int velocity_x;
+    int velocity_y;
+    int vector;   // ???
+    void init();
+    void move();
+    // destructor
+    // ????? 
+  private:
+    int direction;
+};
+
+void TieFighter::init(){
+  x = random(1, TFT_WIDTH);
+  y = random(1, TFT_HEIGHT);
+  velocity_x = random(1,5);
+  velocity_y = random(1,5);
+  vector = 0;
+}
+
+void TieFighter::move(){
+  x = x + velocity_x;
+  y = y + velocity_y;
+  
+  if (y>TFT_HEIGHT){
+    y = random(1, TFT_HEIGHT);
+    velocity_y = random(MIN_VELOCITY, MAX_VELOCITY);
+    if (random(1,3)==1){
+      velocity_y = velocity_y * (-1);
+    }
+  }
+  if (y<0){
+    y = random(1, TFT_HEIGHT);
+    velocity_y = random(MIN_VELOCITY, MAX_VELOCITY);
+    if (random(1,3)==1){
+      velocity_y = velocity_y * (-1);
+    }
+  }
+  if (x>TFT_WIDTH){
+    x = random(1, TFT_WIDTH);
+    velocity_x = random(MIN_VELOCITY, MAX_VELOCITY);
+    if (random(1,3)==1){
+      velocity_x = velocity_x * (-1);
+    }
+  }
+  if (x<0){
+    x = random(1, TFT_WIDTH);
+    velocity_x = random(MIN_VELOCITY, MAX_VELOCITY);
+    if (random(1,3)==1){
+      velocity_x = velocity_x * (-1);
+    }
+  }
+}
+
+
+// --------- PROGRAM VARIABLES ---------
+int framendx = 0;   // increment for each frame 
+
+// crosshair related variables. 
+int x = 0;
+int y = 0; 
+int x_start = 0;
+int x_end = 0;
+int y_start = 0;
+int y_end = 0;
+int x_step = 2;
+int y_step = 2;
+
+// keep track of score 
+int score = 0;
+
+// enemy ships
+TieFighter fighter[MAX_NUM_FIGHTERS];
+
 
 // Stock font and GFXFF reference handle
 // #define GFXFF 1
@@ -29,6 +117,7 @@ void drawCrosshair(int x, int y, int color);
 void displayScore(int x, int y, int color);
 void fireLaser(int x, int y, int color);
 void updateScreen();
+bool detectBogeyKills(int x, int y);
 
 // ------------ start of code ------------------
 void drawCrosshair(int x, int y, int color){
@@ -55,6 +144,29 @@ void fireLaser(int x, int y, int color){
   buffer.drawWideLine(bottomleftx, bottomlefty, x, y, 4.0, color);
   // fire right laser to x,y point
   buffer.drawWideLine(bottomrightx, bottomrighty, x, y, 4.0, color);
+
+  // detect if we hit anything
+  detectBogeyKills(x, y);
+}
+
+bool detectBogeyKills(int x, int y){
+  // detect if we hit any bogeys
+  // return true or false
+  bool hit = false;
+
+  for (int i=0; i<NUM_FIGHTERS; i++){
+    // fighter[i].x, fighter[i].y 
+    // size is 20,20
+    // x, y is location where laser hit
+    // check X tolerance
+    if ((x > fighter[i].x-10) && (x < fighter[i].x+10) && (y>fighter[i].y-10) && (y<fighter[i].y+10)) {
+      hit = true;
+      score = score + 10;
+      // TODO: do something about fighter if hit... show explosion, remove from screen, do something
+      buffer.drawSmoothCircle(x, y, 15, TFT_RED, TFT_ORANGE);
+    }
+  }
+  return hit;
 }
 
 void updateScreen(){
@@ -62,26 +174,48 @@ void updateScreen(){
   buffer.pushSprite(0, 0);
 }
 
-int angle = 0;
-int x = 0;
-int y = 0; 
-int x_start = 0;
-int x_end = 0;
-int y_start = 0;
-int y_end = 0;
-int x_step = 2;
-int y_step = 2;
-int score = 0;
-int loopndx = 0;
+void drawEnemyShip(int x, int y, int transparentcolor){
+  // 
+  enemy.setPivot(10,10);
+  enemy.pushToSprite(&buffer, x, y, transparentcolor);
+  // enemy.pushRotated(&buffer, 45, transparentcolor);
+}
+
+void drawStars(){
+  int num_stars = 10;
+  int star_x;
+  int star_y;
+  for (int i=0; i<num_stars; i++){
+    star_x = random(TFT_WIDTH);
+    star_y = random(MARGIN_TOP, TFT_HEIGHT);
+    buffer.drawCircle(star_x, star_y, 1, TFT_LIGHTGREY);
+  }
+}
+
+
 
 void setup() {
   tft.init();
   tft.setRotation(0);
   buffer.createSprite(TFT_WIDTH, TFT_HEIGHT);
+  enemy.createSprite(20, 20);
 
   // initialize stating point of crosshair
   x_start = random(TFT_WIDTH * 0.2, TFT_WIDTH * 0.8);
   y_start = random(TFT_HEIGHT * 0.2, TFT_HEIGHT * 0.8);
+
+  // create X number of fighters. init x, y, vector values of fighter
+  for (int i=0; i<NUM_FIGHTERS; i++){
+    fighter[i].init();
+  }
+
+  // create a tie-fighter sprite
+  enemy.fillSprite(TFT_BLACK);
+  enemy.setPivot(10,10);
+  enemy.drawLine(4, 0, 4, 20, TFT_GREEN);       // left wing
+  enemy.drawLine(16, 0, 16, 20, TFT_GREEN);     // right wing
+  enemy.drawCircle(10, 10, 3, TFT_GREEN);       // cockpit
+
 }
 
 void loop() {
@@ -99,25 +233,32 @@ void loop() {
     // tft.fillScreen(BKGD_COLOR);    // this will cause flickering of display
     // buffer.fillScreen(BKGD_COLOR); // no flicker :) 
     buffer.fillSprite(BKGD_COLOR);    // no flicker :) 
-    
-    // drawCrosshair(TFT_WIDTH/2, TFT_HEIGHT/2, TFT_ORANGE);     // draw new crosshair on center screen 
 
-    loopndx++;
-    if (loopndx > 30000) { loopndx = 0;};
+    // star field
+    drawStars();
+
+    // test draw enemy ships
+    for (int i=0; i<NUM_FIGHTERS; i++){
+      drawEnemyShip(fighter[i].x, fighter[i].y, TFT_BLACK);
+      fighter[i].move();
+    }
+
+    framendx++;
+    if (framendx > 30000) { framendx = 0;};
     
     if (score > 10000) score=0;
-    displayScore(score, TFT_MAGENTA);
+    displayScore(score, TFT_WHITE);
 
     buffer.setTextSize(2);
     buffer.setTextColor(TFT_WHITE);
-    buffer.drawString("ESP32 GAME DEMO", (TFT_WIDTH/2)-90, TFT_HEIGHT/2);
+    buffer.drawString("ESP32 GAME DEMO", (TFT_WIDTH/2)-90, TFT_HEIGHT-20);
     
     // update position of crosshair
     x = x + x_step;
     y = y + y_step;
   
     // moving text with crosshair
-    buffer.setTextColor(TFT_YELLOW);
+    buffer.setTextColor(TFT_LIGHTGREY);
     buffer.setTextSize(1);
     buffer.drawString("X=" + String(x), x+5, y-10);
     buffer.setTextSize(1);
@@ -126,14 +267,15 @@ void loop() {
     drawCrosshair(x, y, TFT_CYAN);    // draw moving crosshair 
 
     // TESTING: fire laser every 20 loops
-    if (loopndx % 20 == 0){
+    if (framendx % 10 == 0){
       fireLaser(x, y, TFT_RED);
-      score = score + 10;
     }
-    if (loopndx % 50 == 0){
+    if (framendx % 15 == 0){
       fireLaser(x, y, TFT_RED);
-      score = score + 10;
     }
+    if (framendx % 35 == 0){
+      fireLaser(x, y, TFT_RED);
+    }    
     
     // update screen with buffer
     updateScreen();
