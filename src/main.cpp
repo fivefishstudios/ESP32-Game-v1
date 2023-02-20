@@ -13,7 +13,10 @@
 #define MIN_VELOCITY 2      // of enemy ships
 #define MAX_VELOCITY 6      // of enemy ships
 #define NUM_FIGHTERS 10     // current number of enemy ships
-#define MAX_NUM_FIGHTERS 20 // maximum possible number of enemy ships
+
+#define FIRE_LASER_PIN 26   // pin # for push button digital in
+int LaserFireCounter;       // used by IRQ for Laser fire push button 
+
 
 TFT_eSPI    tft = TFT_eSPI();            // Create object "tft"
 TFT_eSprite buffer = TFT_eSprite(&tft);  // Create Sprite object "img" with pointer to "tft" object
@@ -78,9 +81,18 @@ void TieFighter::move(){
   }
 }
 
+// ----------- IRQ Handler ------------
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
+// IRQ handler for Laser Fire
+void IRAM_ATTR LaserFireHandler() {
+  portENTER_CRITICAL_ISR(&mux);
+  LaserFireCounter++;  
+  portEXIT_CRITICAL_ISR(&mux);
+}
 
 // --------- PROGRAM VARIABLES ---------
-int framendx = 0;   // increment for each frame 
+int framendx = 0;       // increment for each frame 
 
 // crosshair related variables. 
 int x = 0;
@@ -96,8 +108,7 @@ int y_step = 2;
 int score = 0;
 
 // enemy ships
-TieFighter fighter[MAX_NUM_FIGHTERS];
-
+TieFighter fighter[NUM_FIGHTERS];
 
 // Stock font and GFXFF reference handle
 // #define GFXFF 1
@@ -164,6 +175,7 @@ bool detectBogeyKills(int x, int y){
       score = score + 10;
       // TODO: do something about fighter if hit... show explosion, remove from screen, do something
       buffer.drawSmoothCircle(x, y, 15, TFT_RED, TFT_ORANGE);
+      fighter[i].init();  // this will respawn this enemy to a new location (therefore, erasing current location)
     }
   }
   return hit;
@@ -193,8 +205,12 @@ void drawStars(){
 }
 
 
-
+// ----------- SETUP -------------
 void setup() {
+  // setup PAD switch IRQ
+  pinMode(FIRE_LASER_PIN, INPUT_PULLDOWN);
+  attachInterrupt(digitalPinToInterrupt(FIRE_LASER_PIN), LaserFireHandler, RISING);
+
   tft.init();
   tft.setRotation(0);
   buffer.createSprite(TFT_WIDTH, TFT_HEIGHT);
@@ -266,16 +282,25 @@ void loop() {
 
     drawCrosshair(x, y, TFT_CYAN);    // draw moving crosshair 
 
+    if (LaserFireCounter > 0) { 
+      fireLaser(x, y, TFT_RED);
+      // clear LaserFireCounter
+      portENTER_CRITICAL(&mux);
+      // LaserFireCounter--;     
+      LaserFireCounter = 0;
+      portEXIT_CRITICAL(&mux);
+    }   
+
     // TESTING: fire laser every 20 loops
-    if (framendx % 10 == 0){
-      fireLaser(x, y, TFT_RED);
-    }
-    if (framendx % 15 == 0){
-      fireLaser(x, y, TFT_RED);
-    }
-    if (framendx % 35 == 0){
-      fireLaser(x, y, TFT_RED);
-    }    
+    // if (framendx % 10 == 0){
+    //   fireLaser(x, y, TFT_RED);
+    // }
+    // if (framendx % 15 == 0){
+    //   fireLaser(x, y, TFT_RED);
+    // }
+    // if (framendx % 35 == 0){
+    //   fireLaser(x, y, TFT_RED);
+    // }    
     
     // update screen with buffer
     updateScreen();
