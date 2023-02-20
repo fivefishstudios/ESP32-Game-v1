@@ -53,30 +53,22 @@ void TieFighter::move(){
   if (y>TFT_HEIGHT){
     y = random(1, TFT_HEIGHT);
     velocity_y = random(MIN_VELOCITY, MAX_VELOCITY);
-    if (random(1,3)==1){
-      velocity_y = velocity_y * (-1);
-    }
+    if (random(1,3)==1) velocity_y = velocity_y * (-1);
   }
   if (y<0){
     y = random(1, TFT_HEIGHT);
     velocity_y = random(MIN_VELOCITY, MAX_VELOCITY);
-    if (random(1,3)==1){
-      velocity_y = velocity_y * (-1);
-    }
+    if (random(1,3)==1) velocity_y = velocity_y * (-1);
   }
   if (x>TFT_WIDTH){
     x = random(1, TFT_WIDTH);
     velocity_x = random(MIN_VELOCITY, MAX_VELOCITY);
-    if (random(1,3)==1){
-      velocity_x = velocity_x * (-1);
-    }
+    if (random(1,3)==1) velocity_x = velocity_x * (-1);
   }
   if (x<0){
     x = random(1, TFT_WIDTH);
     velocity_x = random(MIN_VELOCITY, MAX_VELOCITY);
-    if (random(1,3)==1){
-      velocity_x = velocity_x * (-1);
-    }
+    if (random(1,3)==1) velocity_x = velocity_x * (-1);
   }
 }
 
@@ -203,10 +195,6 @@ void setup() {
   for (int i=0; i<NUM_FIGHTERS; i++){
     fighter[i].init();
   }
-
-  // init crosshair position
-  x = TFT_WIDTH / 2;
-  y = TFT_HEIGHT / 2;
 }
 
 void loop() {
@@ -221,8 +209,8 @@ void loop() {
       fighter[i].move();
     }
     
-    // rollover high score of 10,000
-    if (score > 10000) score=0;
+    // rollover high score of 1,000
+    if (score > 1000) score=0;
     displayScore(score, TFT_WHITE);
 
     // game name at bottom of screen
@@ -233,10 +221,8 @@ void loop() {
     // read the joystick
     analog_X_Value = analogRead(ANALOG_X_PIN);  // 0 - 4095 ---> scale to 0 - TFT_WIDTH-1
     analog_Y_Value = analogRead(ANALOG_Y_PIN);  // 0 - 4095 ---> scale to 0 - TFT_HEIGHT-1
-    // Serial.print("\nX=");
-    // Serial.println(analog_X_Value);
-    // Serial.print("Y=");
-    // Serial.println(analog_Y_Value);
+    // Serial.print("\nX="); Serial.println(analog_X_Value);
+    // Serial.print("Y="); Serial.println(analog_Y_Value);
     // proportionally scale to TFT screen
     x = map(analog_X_Value, 0, 4095, 0, TFT_WIDTH-1);
     y = map(analog_Y_Value, 0, 4095, MARGIN_TOP, TFT_HEIGHT-1);
@@ -251,7 +237,7 @@ void loop() {
     buffer.setTextSize(1);
     buffer.drawString("Y=" + String(y), x+5, y+6);
 
-    // check interrupts if PB was pressed
+    // check interrupt if Push button was pressed
     if (LaserFireCounter > 0) { 
       fireLaser(x, y, TFT_RED);
       // clear LaserFireCounter
