@@ -4,11 +4,8 @@
 // TFT specs
 #define TFT_WIDTH  240
 #define TFT_HEIGHT 320 
-
 #define BKGD_COLOR TFT_BLACK
 #define MARGIN_TOP 20
-
-#define STEP_ITERATIONS 8   // only used during simulations
 
 #define MIN_VELOCITY 2      // of enemy ships
 #define MAX_VELOCITY 6      // of enemy ships
@@ -104,9 +101,16 @@ bool detectBogeyKills(int x, int y);
 void drawCrosshair(int x, int y, int color){
   buffer.drawLine(0, y, TFT_WIDTH, y, color);   // draw horiz line
   buffer.drawLine(x, MARGIN_TOP, x, TFT_HEIGHT, color);  // draw vert line
+  // moving text with crosshair
+  buffer.setTextColor(TFT_LIGHTGREY);
+  buffer.setTextSize(1);
+  buffer.drawString("X=" + String(x), x+5, y-10);
+  buffer.setTextSize(1);
+  buffer.drawString("Y=" + String(y), x+5, y+6);  
 }
 
 void displayScore(int score, int color){
+  if (score > 1000) score=0;
   buffer.drawLine(0, MARGIN_TOP,TFT_WIDTH, MARGIN_TOP, color);
   buffer.setTextSize(2);
   buffer.setTextColor(color);
@@ -160,6 +164,13 @@ void drawEnemyShip(int x, int y, int transparentcolor){
   // enemy.pushRotated(&buffer, 45, transparentcolor);
 }
 
+void drawEnemyShips(){
+  for (int i=0; i<NUM_FIGHTERS; i++){
+    drawEnemyShip(fighter[i].x, fighter[i].y, TFT_BLACK);
+    fighter[i].move();
+  }
+}
+
 void drawStars(){
   int num_stars = 10;
   int star_x;
@@ -169,6 +180,24 @@ void drawStars(){
     star_y = random(MARGIN_TOP, TFT_HEIGHT);
     buffer.drawCircle(star_x, star_y, 1, TFT_LIGHTGREY);
   }
+}
+
+void displayGameName(){
+  // game name at bottom of screen
+  buffer.setTextSize(2);
+  buffer.setTextColor(TFT_WHITE);
+  buffer.drawString("ESP-ar Wars 32", (TFT_WIDTH/2)-80, TFT_HEIGHT-20);
+}
+
+void readJoystick(){
+  // read the joystick
+  analog_X_Value = analogRead(ANALOG_X_PIN);  // 0 - 4095 ---> scale to 0 - TFT_WIDTH-1
+  analog_Y_Value = analogRead(ANALOG_Y_PIN);  // 0 - 4095 ---> scale to 0 - TFT_HEIGHT-1
+  // Serial.print("\nX="); Serial.println(analog_X_Value);
+  // Serial.print("Y="); Serial.println(analog_Y_Value);
+  // proportionally scale to TFT screen
+  x = map(analog_X_Value, 0, 4095, 0, TFT_WIDTH-1);
+  y = map(analog_Y_Value, 0, 4095, MARGIN_TOP, TFT_HEIGHT-1);
 }
 
 // ----------- SETUP -------------
@@ -181,10 +210,11 @@ void setup() {
 
   tft.init();
   tft.setRotation(0);
+  
   buffer.createSprite(TFT_WIDTH, TFT_HEIGHT);
-  enemy.createSprite(20, 20);
 
   // create a tie-fighter sprite
+  enemy.createSprite(20, 20);
   enemy.fillSprite(TFT_BLACK);
   enemy.setPivot(10,10);
   enemy.drawLine(4, 0, 4, 20, TFT_GREEN);       // left wing
@@ -200,54 +230,21 @@ void setup() {
 void loop() {
     buffer.fillSprite(BKGD_COLOR);    // no flicker :) 
 
-    // star field
     drawStars();
-
-    // draw enemy ships
-    for (int i=0; i<NUM_FIGHTERS; i++){
-      drawEnemyShip(fighter[i].x, fighter[i].y, TFT_BLACK);
-      fighter[i].move();
-    }
-    
-    // rollover high score of 1,000
-    if (score > 1000) score=0;
+    drawEnemyShips();  
     displayScore(score, TFT_WHITE);
-
-    // game name at bottom of screen
-    buffer.setTextSize(2);
-    buffer.setTextColor(TFT_WHITE);
-    buffer.drawString("ESP-ar Wars 32", (TFT_WIDTH/2)-80, TFT_HEIGHT-20);
-
-    // read the joystick
-    analog_X_Value = analogRead(ANALOG_X_PIN);  // 0 - 4095 ---> scale to 0 - TFT_WIDTH-1
-    analog_Y_Value = analogRead(ANALOG_Y_PIN);  // 0 - 4095 ---> scale to 0 - TFT_HEIGHT-1
-    // Serial.print("\nX="); Serial.println(analog_X_Value);
-    // Serial.print("Y="); Serial.println(analog_Y_Value);
-    // proportionally scale to TFT screen
-    x = map(analog_X_Value, 0, 4095, 0, TFT_WIDTH-1);
-    y = map(analog_Y_Value, 0, 4095, MARGIN_TOP, TFT_HEIGHT-1);
-
-    // draw crosshair 
+    displayGameName();
+    readJoystick();
     drawCrosshair(x, y, TFT_CYAN);    
-
-    // moving text with crosshair
-    buffer.setTextColor(TFT_LIGHTGREY);
-    buffer.setTextSize(1);
-    buffer.drawString("X=" + String(x), x+5, y-10);
-    buffer.setTextSize(1);
-    buffer.drawString("Y=" + String(y), x+5, y+6);
 
     // check interrupt if Push button was pressed
     if (LaserFireCounter > 0) { 
       fireLaser(x, y, TFT_RED);
-      // clear LaserFireCounter
       portENTER_CRITICAL(&mux);
       // LaserFireCounter--;     
-      LaserFireCounter = 0;
+      LaserFireCounter = 0;   // reset 
       portEXIT_CRITICAL(&mux);
     }   
     
-    // update screen with buffer
     updateScreen();
-    yield(); // Stop watchdog reset
 }
