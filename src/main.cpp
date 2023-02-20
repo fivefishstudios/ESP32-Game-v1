@@ -15,13 +15,16 @@
 #define NUM_FIGHTERS 10     // current number of enemy ships
 
 #define FIRE_LASER_PIN 26   // pin # for push button digital in
-int LaserFireCounter;       // used by IRQ for Laser fire push button 
+#define ANALOG_X_PIN   36   // X analog input for joystick
+#define ANALOG_Y_PIN   39   // Y analog input for joystick
 
+int LaserFireCounter;       // used by IRQ for Laser fire push button 
+float analog_X_Value;
+float analog_Y_Value;
 
 TFT_eSPI    tft = TFT_eSPI();            // Create object "tft"
 TFT_eSprite buffer = TFT_eSprite(&tft);  // Create Sprite object "img" with pointer to "tft" object
 TFT_eSprite enemy = TFT_eSprite(&tft);   // tie-fighter
-
 
 // ---------- OBJECTS --------------
 class TieFighter {
@@ -30,11 +33,8 @@ class TieFighter {
     int y;
     int velocity_x;
     int velocity_y;
-    int vector;   // ???
     void init();
     void move();
-    // destructor
-    // ????? 
   private:
     int direction;
 };
@@ -44,7 +44,6 @@ void TieFighter::init(){
   y = random(1, TFT_HEIGHT);
   velocity_x = random(1,5);
   velocity_y = random(1,5);
-  vector = 0;
 }
 
 void TieFighter::move(){
@@ -92,36 +91,15 @@ void IRAM_ATTR LaserFireHandler() {
 }
 
 // --------- PROGRAM VARIABLES ---------
-int framendx = 0;       // increment for each frame 
-
 // crosshair related variables. 
 int x = 0;
 int y = 0; 
-int x_start = 0;
-int x_end = 0;
-int y_start = 0;
-int y_end = 0;
-int x_step = 2;
-int y_step = 2;
 
 // keep track of score 
 int score = 0;
 
 // enemy ships
 TieFighter fighter[NUM_FIGHTERS];
-
-// Stock font and GFXFF reference handle
-// #define GFXFF 1
-// #define FF18 &FreeSans12pt7b
-
-// Custom are fonts added to library "TFT_eSPI\Fonts\Custom" folder
-// a #include must also be added to the "User_Custom_Fonts.h" file
-// in the "TFT_eSPI\User_Setups" folder. See example entries.
-// #define CF_OL24 &Orbitron_Light_24
-// #define CF_OL32 &Orbitron_Light_32
-// #define CF_RT24 &Roboto_Thin_24
-// #define CF_S24  &Satisfy_24
-// #define CF_Y32  &Yellowtail_32
 
 // forward declarations
 void drawCrosshair(int x, int y, int color);
@@ -140,8 +118,8 @@ void displayScore(int score, int color){
   buffer.drawLine(0, MARGIN_TOP,TFT_WIDTH, MARGIN_TOP, color);
   buffer.setTextSize(2);
   buffer.setTextColor(color);
-  buffer.drawString("Player 1", 10, 1);
-  buffer.drawString("SC:" + String(score), 150, 1);
+  buffer.drawString("@owel.codes", 2, 1);
+  buffer.drawString("SC:" + String(score), 160, 1);
 }
 
 void fireLaser(int x, int y, int color){
@@ -166,16 +144,13 @@ bool detectBogeyKills(int x, int y){
   bool hit = false;
 
   for (int i=0; i<NUM_FIGHTERS; i++){
-    // fighter[i].x, fighter[i].y 
-    // size is 20,20
-    // x, y is location where laser hit
-    // check X tolerance
+    // fighter[i].x, fighter[i].y, sprite size is 20,20
     if ((x > fighter[i].x-10) && (x < fighter[i].x+10) && (y>fighter[i].y-10) && (y<fighter[i].y+10)) {
       hit = true;
       score = score + 10;
-      // TODO: do something about fighter if hit... show explosion, remove from screen, do something
+      // do something about fighter if hit... show explosion, remove from screen, do something
       buffer.drawSmoothCircle(x, y, 15, TFT_RED, TFT_ORANGE);
-      fighter[i].init();  // this will respawn this enemy to a new location (therefore, erasing current location)
+      fighter[i].init();  // this will respawn this enemy to a new location (therefore, erasing current location that was hit)
     }
   }
   return hit;
@@ -204,10 +179,11 @@ void drawStars(){
   }
 }
 
-
 // ----------- SETUP -------------
 void setup() {
-  // setup PAD switch IRQ
+  // Serial.begin(115200);
+
+  // setup FireLaser Button Interrupt
   pinMode(FIRE_LASER_PIN, INPUT_PULLDOWN);
   attachInterrupt(digitalPinToInterrupt(FIRE_LASER_PIN), LaserFireHandler, RISING);
 
@@ -216,15 +192,6 @@ void setup() {
   buffer.createSprite(TFT_WIDTH, TFT_HEIGHT);
   enemy.createSprite(20, 20);
 
-  // initialize stating point of crosshair
-  x_start = random(TFT_WIDTH * 0.2, TFT_WIDTH * 0.8);
-  y_start = random(TFT_HEIGHT * 0.2, TFT_HEIGHT * 0.8);
-
-  // create X number of fighters. init x, y, vector values of fighter
-  for (int i=0; i<NUM_FIGHTERS; i++){
-    fighter[i].init();
-  }
-
   // create a tie-fighter sprite
   enemy.fillSprite(TFT_BLACK);
   enemy.setPivot(10,10);
@@ -232,47 +199,51 @@ void setup() {
   enemy.drawLine(16, 0, 16, 20, TFT_GREEN);     // right wing
   enemy.drawCircle(10, 10, 3, TFT_GREEN);       // cockpit
 
+  // create X number of fighters. init x, y, vector values of fighter
+  for (int i=0; i<NUM_FIGHTERS; i++){
+    fighter[i].init();
+  }
+
+  // init crosshair position
+  x = TFT_WIDTH / 2;
+  y = TFT_HEIGHT / 2;
 }
 
 void loop() {
-  // TEST: Let's move the crosshair randomly
-  x_end = random(TFT_WIDTH * 0.05, TFT_WIDTH * 0.95);
-  y_end  = random(TFT_HEIGHT * 0.05, TFT_HEIGHT * 0.95);
-
-  x_step = (x_end - x_start)/STEP_ITERATIONS;
-  y_step = (y_end - y_start)/STEP_ITERATIONS;
-
-  x = x_start;
-  y = y_start;
-
-  for (int i=0; i<STEP_ITERATIONS; i++){
-    // tft.fillScreen(BKGD_COLOR);    // this will cause flickering of display
-    // buffer.fillScreen(BKGD_COLOR); // no flicker :) 
     buffer.fillSprite(BKGD_COLOR);    // no flicker :) 
 
     // star field
     drawStars();
 
-    // test draw enemy ships
+    // draw enemy ships
     for (int i=0; i<NUM_FIGHTERS; i++){
       drawEnemyShip(fighter[i].x, fighter[i].y, TFT_BLACK);
       fighter[i].move();
     }
-
-    framendx++;
-    if (framendx > 30000) { framendx = 0;};
     
+    // rollover high score of 10,000
     if (score > 10000) score=0;
     displayScore(score, TFT_WHITE);
 
+    // game name at bottom of screen
     buffer.setTextSize(2);
     buffer.setTextColor(TFT_WHITE);
-    buffer.drawString("ESP32 GAME DEMO", (TFT_WIDTH/2)-90, TFT_HEIGHT-20);
-    
-    // update position of crosshair
-    x = x + x_step;
-    y = y + y_step;
-  
+    buffer.drawString("ESP-ar Wars 32", (TFT_WIDTH/2)-80, TFT_HEIGHT-20);
+
+    // read the joystick
+    analog_X_Value = analogRead(ANALOG_X_PIN);  // 0 - 4095 ---> scale to 0 - TFT_WIDTH-1
+    analog_Y_Value = analogRead(ANALOG_Y_PIN);  // 0 - 4095 ---> scale to 0 - TFT_HEIGHT-1
+    // Serial.print("\nX=");
+    // Serial.println(analog_X_Value);
+    // Serial.print("Y=");
+    // Serial.println(analog_Y_Value);
+    // proportionally scale to TFT screen
+    x = map(analog_X_Value, 0, 4095, 0, TFT_WIDTH-1);
+    y = map(analog_Y_Value, 0, 4095, MARGIN_TOP, TFT_HEIGHT-1);
+
+    // draw crosshair 
+    drawCrosshair(x, y, TFT_CYAN);    
+
     // moving text with crosshair
     buffer.setTextColor(TFT_LIGHTGREY);
     buffer.setTextSize(1);
@@ -280,8 +251,7 @@ void loop() {
     buffer.setTextSize(1);
     buffer.drawString("Y=" + String(y), x+5, y+6);
 
-    drawCrosshair(x, y, TFT_CYAN);    // draw moving crosshair 
-
+    // check interrupts if PB was pressed
     if (LaserFireCounter > 0) { 
       fireLaser(x, y, TFT_RED);
       // clear LaserFireCounter
@@ -290,24 +260,8 @@ void loop() {
       LaserFireCounter = 0;
       portEXIT_CRITICAL(&mux);
     }   
-
-    // TESTING: fire laser every 20 loops
-    // if (framendx % 10 == 0){
-    //   fireLaser(x, y, TFT_RED);
-    // }
-    // if (framendx % 15 == 0){
-    //   fireLaser(x, y, TFT_RED);
-    // }
-    // if (framendx % 35 == 0){
-    //   fireLaser(x, y, TFT_RED);
-    // }    
     
     // update screen with buffer
     updateScreen();
     yield(); // Stop watchdog reset
-  }
-  // reset and start from last point
-  x_start = x;
-  y_start = y; 
-
 }
